@@ -256,6 +256,8 @@ public:
 
 	void set_capture_version(int version);
 	int get_capture_version() const;
+	void set_clusterid(std::string id) { m_clusterid = std::move(id); };
+	const std::string& get_clusterid() const { return m_clusterid; }
 
 #ifdef HAS_CAPTURE
 	typedef std::deque<std::string> event_list_t;
@@ -368,6 +370,8 @@ private:
 	component_map_t m_component_map;
 	bool            m_is_captured;
 	int             m_capture_version = -1;
+	// Use the UID of the default namespace as a clusterid
+	std::string m_clusterid;
 
 	friend class k8s_dispatcher;
 	friend class k8s_handler;

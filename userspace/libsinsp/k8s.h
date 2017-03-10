@@ -30,14 +30,16 @@ public:
 	typedef user_event_filter_t::ptr_t    filter_ptr_t;
 
 	k8s(const std::string& uri = "http://localhost:80",
-		bool is_captured = false,
+	    bool is_captured = false,
 #ifdef HAS_CAPTURE
-		ssl_ptr_t ssl = 0,
-		bt_ptr_t bt = 0,
-		bool block = false,
+	    ssl_ptr_t ssl = 0,
+	    bt_ptr_t bt = 0,
+	    bool block = false,
 #endif // HAS_CAPTURE
-		filter_ptr_t event_filter = nullptr,
-		ext_list_ptr_t extensions = nullptr);
+	    filter_ptr_t event_filter = nullptr,
+	    ext_list_ptr_t extensions = nullptr,
+	    bool set_cid = false,
+	    bool only_cid = false);
 
 	~k8s();
 
@@ -85,7 +87,7 @@ private:
 #endif
 
 	// a utility member containing pairs of enumerated values and component names
-	static k8s_component::type_map m_components;
+	k8s_component::type_map m_components;
 	friend class k8s_test;
 };
 

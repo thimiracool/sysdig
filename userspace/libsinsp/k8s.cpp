@@ -13,30 +13,37 @@
 #include <algorithm>
 #include <iostream>
 
-k8s_component::type_map k8s::m_components;
-
 k8s::k8s(const std::string& uri, bool is_captured,
 #ifdef HAS_CAPTURE
-		ssl_ptr_t ssl,
-		bt_ptr_t bt,
-		bool block,
+	 ssl_ptr_t ssl,
+	 bt_ptr_t bt,
+	 bool block,
 #endif // HAS_CAPTURE
-		filter_ptr_t event_filter,
-		ext_list_ptr_t extensions) :
+	 filter_ptr_t event_filter,
+	 ext_list_ptr_t extensions,
+	 bool set_cid,
+	 bool only_cid) :
 		m_state(is_captured),
 		m_event_filter(event_filter)
 #ifdef HAS_CAPTURE
-		,m_net(uri.empty() ?
-			   nullptr : new k8s_net(*this, m_state, uri, ssl, bt, event_filter, block))
+		,m_net(uri.empty() ? nullptr :
+		       new k8s_net(*this, m_state, uri, ssl, bt, event_filter,
+				   block, set_cid, only_cid))
 #endif
 {
 	g_logger.log(std::string("Creating K8s object for [" +
 							 (uri.empty() ? std::string("capture replay") : uri) + ']'),
 							 sinsp_logger::SEV_DEBUG);
-	if(m_components.empty())
+
+	m_components.insert({k8s_component::K8S_NAMESPACES, "namespaces"});
+	if(only_cid)
+	{
+		g_logger.log("K8s: In delegation mode, querying for clusterid only",
+			     sinsp_logger::SEV_DEBUG);
+	}
+	else
 	{
 		m_components.insert({ k8s_component::K8S_NODES,                  "nodes"                  });
-		m_components.insert({ k8s_component::K8S_NAMESPACES,             "namespaces"             });
 		m_components.insert({ k8s_component::K8S_PODS,                   "pods"                   });
 		m_components.insert({ k8s_component::K8S_REPLICATIONCONTROLLERS, "replicationcontrollers" });
 		m_components.insert({ k8s_component::K8S_SERVICES,               "services"               });

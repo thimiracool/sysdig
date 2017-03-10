@@ -33,15 +33,24 @@ public:
 		ssl_ptr_t ssl = nullptr,
 		bt_ptr_t bt = nullptr,
 		filter_ptr_t event_filter = nullptr,
-		bool blocking_sockets = false);
+		bool blocking_sockets = false,
+		bool set_clusterid = false,
+		bool clusterid_only = false);
 
 	~k8s_net();
 
-	static handler_ptr_t make_handler(k8s_state_t& state, const k8s_component::type component, bool connect = true,
-									 handler_ptr_t dep = std::make_shared<k8s_dummy_handler>(),
-									 collector_ptr_t collector = nullptr, const std::string& urlstr = "",
-									 ssl_ptr_t ssl = nullptr, bt_ptr_t bt = nullptr, bool blocking = false,
-									 filter_ptr_t event_filter = nullptr);
+	static handler_ptr_t make_handler(k8s_state_t& state,
+					  const k8s_component::type component,
+					  bool connect = true,
+					  handler_ptr_t dep = std::make_shared<k8s_dummy_handler>(),
+					  collector_ptr_t collector = nullptr,
+					  const std::string& urlstr = "",
+					  ssl_ptr_t ssl = nullptr,
+					  bt_ptr_t bt = nullptr,
+					  bool blocking = false,
+					  filter_ptr_t event_filter = nullptr,
+					  bool set_clusterid = false,
+					  bool clusterid_only = false);
 	void add_handler(const k8s_component::type_map::value_type& component);
 	bool has_handler(const k8s_component::type_map::value_type& component);
 	bool has_dependency(const k8s_component::type_map::value_type& component);
@@ -79,6 +88,8 @@ private:
 	bool            m_blocking_sockets = false;
 	filter_ptr_t    m_event_filter;
 	std::string     m_machine_id;
+	const bool m_set_clusterid;
+	const bool m_clusterid_only;
 };
 
 inline bool k8s_net::is_secure()

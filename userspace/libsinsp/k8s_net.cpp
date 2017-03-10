@@ -24,17 +24,22 @@
 
 
 k8s_net::k8s_net(k8s& kube, k8s_state_t& state, const std::string& uri,
-	ssl_ptr_t ssl,
-	bt_ptr_t bt,
-	filter_ptr_t event_filter,
-	bool blocking_sockets) : m_state(state),
-		m_collector(std::make_shared<collector_t>()),
-		m_uri(uri),
-		m_ssl(ssl),
-		m_bt(bt),
-		m_stopped(true),
-		m_blocking_sockets(blocking_sockets),
-		m_event_filter(event_filter)
+		 ssl_ptr_t ssl,
+		 bt_ptr_t bt,
+		 filter_ptr_t event_filter,
+		 bool blocking_sockets,
+		 bool set_clusterid,
+		 bool clusterid_only)
+	: m_state(state),
+	  m_collector(std::make_shared<collector_t>()),
+	  m_uri(uri),
+	  m_ssl(ssl),
+	  m_bt(bt),
+	  m_stopped(true),
+	  m_blocking_sockets(blocking_sockets),
+	  m_event_filter(event_filter),
+	  m_set_clusterid(set_clusterid),
+	  m_clusterid_only(clusterid_only)
 {
 }
 
@@ -106,7 +111,7 @@ k8s_net::handler_ptr_t k8s_net::get_dependency_handler(const handler_map_t& hand
 		case k8s_component::K8S_NODES:
 			return std::make_shared<k8s_dummy_handler>();
 		case k8s_component::K8S_NAMESPACES:
-			return get_handler(handlers, k8s_component::K8S_NODES);
+			return std::make_shared<k8s_dummy_handler>();
 		case k8s_component::K8S_PODS:
 			return get_handler(handlers, k8s_component::K8S_NAMESPACES);
 		case k8s_component::K8S_REPLICATIONCONTROLLERS:
@@ -138,16 +143,21 @@ bool k8s_net::has_dependency(const k8s_component::type_map::value_type& componen
 	return (it && it->is_state_built());
 }
 
-k8s_net::handler_ptr_t k8s_net::make_handler(k8s_state_t& state, const k8s_component::type component, bool connect,
-											handler_ptr_t dep, collector_ptr_t collector, const std::string& urlstr,
-											ssl_ptr_t ssl, bt_ptr_t bt, bool blocking, filter_ptr_t event_filter)
+k8s_net::handler_ptr_t k8s_net::make_handler(k8s_state_t& state,
+					     const k8s_component::type component,
+					     bool connect, handler_ptr_t dep,
+					     collector_ptr_t collector,
+					     const std::string& urlstr,
+					     ssl_ptr_t ssl, bt_ptr_t bt,
+					     bool blocking, filter_ptr_t event_filter,
+					     bool set_clusterid, bool clusterid_only)
 {
 	switch(component)
 	{
 		case k8s_component::K8S_NODES:
 			return std::make_shared<k8s_node_handler>(state, dep, collector, urlstr, "1.1", ssl, bt, connect, blocking);
 		case k8s_component::K8S_NAMESPACES:
-			return std::make_shared<k8s_namespace_handler>(state, dep, collector, urlstr, "1.1", ssl, bt, connect, blocking);
+			return std::make_shared<k8s_namespace_handler>(state, dep, collector, urlstr, "1.1", ssl, bt, connect, blocking, set_clusterid, clusterid_only);
 		case k8s_component::K8S_PODS:
 			return std::make_shared<k8s_pod_handler>(state, dep, collector, urlstr, "1.1", ssl, bt, connect, blocking);
 		case k8s_component::K8S_REPLICATIONCONTROLLERS:
@@ -175,8 +185,11 @@ void k8s_net::add_handler(const k8s_component::type_map::value_type& component)
 	if(!has_handler(component))
 	{
 		handler_ptr_t handler =
-			make_handler(m_state, component.first, true, get_dependency_handler(m_handlers, component),
-						 m_collector, m_uri.to_string(), m_ssl, m_bt, m_blocking_sockets, m_event_filter);
+			make_handler(m_state, component.first, true,
+				     get_dependency_handler(m_handlers, component),
+				     m_collector, m_uri.to_string(), m_ssl, m_bt,
+				     m_blocking_sockets, m_event_filter,
+				     m_set_clusterid, m_clusterid_only);
 		if(handler)
 		{
 			if(!m_machine_id.empty())

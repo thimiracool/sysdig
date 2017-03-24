@@ -21,54 +21,32 @@ k8s::k8s(const std::string& uri, bool is_captured,
 #endif // HAS_CAPTURE
 	 filter_ptr_t event_filter,
 	 ext_list_ptr_t extensions,
-	 bool set_cid,
-	 bool only_cid) :
+	 int delegated_nodes
+	) :
 		m_state(is_captured),
-		m_event_filter(event_filter)
+		m_watch_events(event_filter != nullptr),
+		m_extensions(extensions),
+		m_delegated_nodes(delegated_nodes)
 #ifdef HAS_CAPTURE
 		,m_net(uri.empty() ? nullptr :
-		       new k8s_net(*this, m_state, uri, ssl, bt, event_filter,
-				   block, set_cid, only_cid))
+		       new k8s_net(m_state, uri, ssl, bt, event_filter, block))
 #endif
 {
 	g_logger.log(std::string("Creating K8s object for [" +
-							 (uri.empty() ? std::string("capture replay") : uri) + ']'),
-							 sinsp_logger::SEV_DEBUG);
+				 (uri.empty() ? std::string("capture replay") : uri) + ']'),
+		     sinsp_logger::SEV_DEBUG);
 
+	m_components.insert({k8s_component::K8S_NODES, "nodes"});
 	m_components.insert({k8s_component::K8S_NAMESPACES, "namespaces"});
-	if(only_cid)
+	ASSERT(m_delegated_nodes >= 0);
+	if(m_delegated_nodes > 0)
 	{
-		g_logger.log("K8s: In delegation mode, querying for clusterid only",
+		g_logger.log("K8s: In delegation mode, only querying nodes and namespaces to start",
 			     sinsp_logger::SEV_DEBUG);
 	}
 	else
 	{
-		m_components.insert({ k8s_component::K8S_NODES,                  "nodes"                  });
-		m_components.insert({ k8s_component::K8S_PODS,                   "pods"                   });
-		m_components.insert({ k8s_component::K8S_REPLICATIONCONTROLLERS, "replicationcontrollers" });
-		m_components.insert({ k8s_component::K8S_SERVICES,               "services"               });
-		if(event_filter)
-		{
-			m_components.insert({ k8s_component::K8S_EVENTS, "events"});
-		}
-		if(extensions)
-		{
-			for(const auto& ext : *extensions)
-			{
-				if(ext == "daemonsets")
-				{
-					m_components.insert({ k8s_component::K8S_DAEMONSETS,  "daemonsets"  });
-				}
-				else if(ext == "deployments")
-				{
-					m_components.insert({ k8s_component::K8S_DEPLOYMENTS, "deployments" });
-				}
-				else if(ext == "replicasets")
-				{
-					m_components.insert({ k8s_component::K8S_REPLICASETS, "replicasets" });
-				}
-			}
-		}
+		insert_delegated_components();
 	}
 }
 
@@ -76,6 +54,15 @@ k8s::~k8s()
 {
 	stop_watch();
 	cleanup();
+}
+
+bool k8s::is_delegated() const
+{
+	if (m_delegated_nodes > 0 && m_net != nullptr)
+	{
+		return m_net->is_delegated();
+	}
+	return false;
 }
 
 void k8s::stop_watch()
@@ -96,57 +83,87 @@ void k8s::cleanup()
 #endif
 }
 
+void k8s::insert_delegated_components()
+{
+	if (m_comps_inserted)
+	{
+		return;
+	}
+
+	m_components.insert({ k8s_component::K8S_PODS,                   "pods"                   });
+	m_components.insert({ k8s_component::K8S_REPLICATIONCONTROLLERS, "replicationcontrollers" });
+	m_components.insert({ k8s_component::K8S_SERVICES,               "services"               });
+	if(m_watch_events)
+	{
+		m_components.insert({ k8s_component::K8S_EVENTS, "events" });
+	}
+	if(m_extensions)
+	{
+		for(const auto& ext : *m_extensions)
+		{
+			if(ext == "daemonsets")
+			{
+				m_components.insert({ k8s_component::K8S_DAEMONSETS,  "daemonsets"  });
+			}
+			else if(ext == "deployments")
+			{
+				m_components.insert({ k8s_component::K8S_DEPLOYMENTS, "deployments" });
+			}
+			else if(ext == "replicasets")
+			{
+				m_components.insert({ k8s_component::K8S_REPLICASETS, "replicasets" });
+			}
+		}
+	}
+
+	m_comps_inserted = true;
+}
+
 void k8s::check_components()
 {
 #ifdef HAS_CAPTURE
-	if(m_net)
-	{
-		for (auto it = m_components.cbegin(); it != m_components.cend();)
-		{
-			if(m_net->has_handler(*it))
-			{
-				k8s_net::handler_ptr_t handler = k8s_net::get_handler(m_net->handlers(), *it);
-				if(handler)
-				{
-					k8s_handler::api_error_ptr handler_error = handler->error();
-					// HTTP error > 400 means non-existing, forbidden, etc.
-					if(handler_error && handler_error->code() >= 400)
-					{
-						std::string handler_name = handler->name();
-						if(!k8s_component::is_critical(handler_name))
-						{
-							g_logger.log("K8s: removing " + handler_name + " due to HTTP error " +
-										 std::to_string(handler_error->code()) +
-										 ", reason: " + handler_error->reason() +
-										 ", message: " + handler_error->message(),
-										 sinsp_logger::SEV_WARNING);
-							m_components.erase(it++);
-							continue;
-						}
-						else
-						{
-							throw sinsp_exception(handler_error->to_string());
-						}
-					}
-				}
-			}
-			else
-			{
-				if(it->first != k8s_component::K8S_EVENTS)
-				{
-					m_net->add_handler(*it);
-				}
-				else if(m_event_filter) // events only if filter is enabled
-				{
-					m_net->add_handler(*it);
-				}
-			}
-			++it;
-		}
-	}
-	else
+	if(m_net == nullptr)
 	{
 		throw sinsp_exception("K8s net object is null.");
+	}
+
+	if (is_delegated())
+	{
+		insert_delegated_components();
+	}
+
+	for (auto it = m_components.cbegin(); it != m_components.cend();)
+	{
+		k8s_net::handler_ptr_t handler = k8s_net::get_handler(m_net->handlers(), *it);
+		if (handler != nullptr)
+		{
+			k8s_handler::api_error_ptr handler_error = handler->error();
+			// HTTP error > 400 means non-existing, forbidden, etc.
+			if(handler_error && handler_error->code() >= 400)
+			{
+				std::string handler_name = handler->name();
+				if(!k8s_component::is_critical(handler_name))
+				{
+					g_logger.log("K8s: removing " + handler_name + " due to HTTP error " +
+						     std::to_string(handler_error->code()) +
+						     ", reason: " + handler_error->reason() +
+						     ", message: " + handler_error->message(),
+						     sinsp_logger::SEV_WARNING);
+					m_components.erase(it++);
+					continue;
+				}
+				else
+				{
+					throw sinsp_exception(handler_error->to_string());
+				}
+			}
+		}
+		// events only if filter is enabled
+		else if(it->first != k8s_component::K8S_EVENTS || m_watch_events)
+		{
+			m_net->add_handler(*it);
+		}
+		++it;
 	}
 #endif
 }

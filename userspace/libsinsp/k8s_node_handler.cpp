@@ -72,6 +72,12 @@ k8s_node_handler::~k8s_node_handler()
 {
 }
 
+bool k8s_node_handler::is_delegated() const
+{
+	// XXX
+	return false;
+}
+
 bool k8s_node_handler::handle_component(const Json::Value& json, const msg_data* data)
 {
 	if(data)

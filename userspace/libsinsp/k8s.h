@@ -38,8 +38,7 @@ public:
 #endif // HAS_CAPTURE
 	    filter_ptr_t event_filter = nullptr,
 	    ext_list_ptr_t extensions = nullptr,
-	    bool set_cid = false,
-	    bool only_cid = false);
+	    int delegated_nodes = 0);
 
 	~k8s();
 
@@ -68,13 +67,20 @@ public:
 	//   - 2 to support k8s events captured in new format (after refactoring)
 	void simulate_watch_event(const std::string& json, int version = 2);
 
+	bool is_delegated() const;
+
 private:
 	void stop_watch();
 
 	void cleanup();
 
+	void insert_delegated_components();
+
 	k8s_state_t  m_state;
-	filter_ptr_t m_event_filter;
+	const bool m_watch_events = false;
+	const ext_list_ptr_t m_extensions = nullptr;
+	const int m_delegated_nodes = 0;
+	bool m_comps_inserted = false;
 
 	typedef std::map<k8s_component::type, std::unique_ptr<k8s_dispatcher>> dispatch_map_t;
 	typedef std::map<k8s_component::type, std::shared_ptr<k8s_handler>> handler_map_t;

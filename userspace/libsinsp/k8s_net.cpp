@@ -23,13 +23,11 @@
 #include <memory>
 
 
-k8s_net::k8s_net(k8s& kube, k8s_state_t& state, const std::string& uri,
+k8s_net::k8s_net(k8s_state_t& state, const std::string& uri,
 		 ssl_ptr_t ssl,
 		 bt_ptr_t bt,
 		 filter_ptr_t event_filter,
-		 bool blocking_sockets,
-		 bool set_clusterid,
-		 bool clusterid_only)
+		 bool blocking_sockets)
 	: m_state(state),
 	  m_collector(std::make_shared<collector_t>()),
 	  m_uri(uri),
@@ -37,9 +35,7 @@ k8s_net::k8s_net(k8s& kube, k8s_state_t& state, const std::string& uri,
 	  m_bt(bt),
 	  m_stopped(true),
 	  m_blocking_sockets(blocking_sockets),
-	  m_event_filter(event_filter),
-	  m_set_clusterid(set_clusterid),
-	  m_clusterid_only(clusterid_only)
+	  m_event_filter(event_filter)
 {
 }
 
@@ -104,6 +100,21 @@ void k8s_net::stop_watching()
 	}
 }
 
+bool k8s_net::is_delegated() const
+{
+	// XXX dynamic_(pointer_)cast should be avoided, but this
+	// saves a ton of rework since we don't keep a pointer to
+	// the derived-class handler anywhere
+	handler_ptr_t base = get_handler(m_handlers, k8s_component::K8S_NODES);
+	std::shared_ptr<k8s_node_handler> node_handler =
+		dynamic_pointer_cast<k8s_node_handler>(base);
+	if (node_handler == nullptr)
+	{
+		return false;
+	}
+	return node_handler->is_delegated();
+}
+
 k8s_net::handler_ptr_t k8s_net::get_dependency_handler(const handler_map_t& handlers, const k8s_component::type& component)
 {
 	switch(component)
@@ -149,15 +160,14 @@ k8s_net::handler_ptr_t k8s_net::make_handler(k8s_state_t& state,
 					     collector_ptr_t collector,
 					     const std::string& urlstr,
 					     ssl_ptr_t ssl, bt_ptr_t bt,
-					     bool blocking, filter_ptr_t event_filter,
-					     bool set_clusterid, bool clusterid_only)
+					     bool blocking, filter_ptr_t event_filter)
 {
 	switch(component)
 	{
 		case k8s_component::K8S_NODES:
 			return std::make_shared<k8s_node_handler>(state, dep, collector, urlstr, "1.1", ssl, bt, connect, blocking);
 		case k8s_component::K8S_NAMESPACES:
-			return std::make_shared<k8s_namespace_handler>(state, dep, collector, urlstr, "1.1", ssl, bt, connect, blocking, set_clusterid, clusterid_only);
+			return std::make_shared<k8s_namespace_handler>(state, dep, collector, urlstr, "1.1", ssl, bt, connect, blocking);
 		case k8s_component::K8S_PODS:
 			return std::make_shared<k8s_pod_handler>(state, dep, collector, urlstr, "1.1", ssl, bt, connect, blocking);
 		case k8s_component::K8S_REPLICATIONCONTROLLERS:
@@ -188,8 +198,7 @@ void k8s_net::add_handler(const k8s_component::type_map::value_type& component)
 			make_handler(m_state, component.first, true,
 				     get_dependency_handler(m_handlers, component),
 				     m_collector, m_uri.to_string(), m_ssl, m_bt,
-				     m_blocking_sockets, m_event_filter,
-				     m_set_clusterid, m_clusterid_only);
+				     m_blocking_sockets, m_event_filter);
 		if(handler)
 		{
 			if(!m_machine_id.empty())

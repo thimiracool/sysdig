@@ -29,6 +29,8 @@ public:
 
 	~k8s_node_handler();
 
+	bool is_delegated() const;
+
 private:
 	static std::string EVENT_FILTER;
 	static std::string STATE_FILTER;

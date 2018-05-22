@@ -18,6 +18,12 @@ along with sysdig.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
+#if !defined(_WIN32) && !defined(CYGWING_AGENT)
+#include <curl/curl.h>
+#include <curl/easy.h>
+#include <curl/multi.h>
+#endif
+
 enum sinsp_container_type
 {
 	CT_DOCKER = 0,
@@ -127,6 +133,9 @@ public:
 	string m_name;
 	string m_image;
 	string m_imageid;
+	string m_imagerepo;
+	string m_imagetag;
+	string m_imagedigest;
 	uint32_t m_container_ip;
 	bool m_privileged;
 	vector<container_mount_info> m_mounts;
@@ -148,6 +157,7 @@ class sinsp_container_manager
 {
 public:
 	sinsp_container_manager(sinsp* inspector);
+	virtual ~sinsp_container_manager();
 
 	const unordered_map<string, sinsp_container_info>* get_containers();
 	bool remove_inactive_containers();
@@ -161,9 +171,12 @@ public:
 	string get_mesos_task_id(const string& container_id);
 
 private:
+#ifndef CYGWING_AGENT
+	static size_t curl_write_callback(const char* in, size_t size, size_t num, string* out);
+#endif
 	string container_to_json(const sinsp_container_info& container_info);
 	bool container_to_sinsp_event(const string& json, sinsp_evt* evt);
-	sinsp_docker_response get_docker(const string& api_version, const string& container_id, string& json);
+	sinsp_docker_response get_docker(const string& url, string &json);
 	bool parse_docker(sinsp_container_info* container);
 	string get_docker_env(const Json::Value &env_vars, const string &mti);
 	bool parse_rkt(sinsp_container_info* container, const string& podid, const string& appname);
@@ -171,4 +184,8 @@ private:
 	sinsp* m_inspector;
 	unordered_map<string, sinsp_container_info> m_containers;
 	uint64_t m_last_flush_time_ns;
+	string m_unix_socket_path;
+	string m_api_version;
+	CURLM *m_curlm;
+	CURL *m_curl;
 };

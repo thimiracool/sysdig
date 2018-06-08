@@ -187,6 +187,8 @@ private:
 	uint64_t m_last_flush_time_ns;
 	string m_unix_socket_path;
 	string m_api_version;
+#ifndef CYGWING_AGENT
 	CURLM *m_curlm;
 	CURL *m_curl;
+#endif
 };

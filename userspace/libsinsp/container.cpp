@@ -738,7 +738,7 @@ sinsp_docker_response sinsp_container_manager::get_docker(const string& url, str
 #else // CYGWING_AGENT
 	const char* response;
 	bool qdres = wh_query_docker(m_inspector->get_wmi_handle(),
-		(char*)message.c_str(),
+		(char*)url.c_str(),
 		&response);
 	if(qdres == false)
 	{
@@ -770,7 +770,7 @@ bool sinsp_container_manager::parse_docker(sinsp_container_info* container)
 {
 	string json;
 #ifndef CYGWING_AGENT
-	sinsp_docker_response resp = get_docker("http://dummy" + m_api_version + "/containers/" + container->m_id + "/json", json);
+	sinsp_docker_response resp = get_docker("http://localhost" + m_api_version + "/containers/" + container->m_id + "/json", json);
 #else
 	sinsp_docker_response resp = get_docker("GET /v1.30/containers/" + container->m_id + "/json HTTP/1.1\r\nHost: docker\r\n\r\n", json);
 #endif
@@ -778,7 +778,7 @@ bool sinsp_container_manager::parse_docker(sinsp_container_info* container)
 		case sinsp_docker_response::RESP_BAD_REQUEST:
 			m_api_version = "";
 #ifndef CYGWING_AGENT
-			resp = get_docker("http://dummy/containers/" + container->m_id + "/json", json);
+			resp = get_docker("http://localhost/containers/" + container->m_id + "/json", json);
 #else
 			resp = get_docker("GET /containers/" + container->m_id + "/json HTTP/1.1\r\nHost: docker\r\n\r\n", json);
 #endif
@@ -824,14 +824,13 @@ bool sinsp_container_manager::parse_docker(sinsp_container_info* container)
 	{
 		string img_json;
 #ifndef CYGWING_AGENT
-		if(get_docker("http://dummy/" + m_api_version + "/images/" + container->m_imageid + "/json?digests=1", img_json) == sinsp_docker_response::RESP_OK)
+		if(get_docker("http://localhost/" + m_api_version + "/images/" + container->m_imageid + "/json?digests=1", img_json) == sinsp_docker_response::RESP_OK)
 #else
 		if(get_docker("GET /v1.30/images/" + container->m_imageid + "/json?digests=1 HTTP/1.1\r\nHost: docker \r\n\r\n", img_json) == sinsp_docker_response::RESP_OK)
 #endif
 		{
-			size_t img_pos = img_json.find("{");
 			Json::Value img_root;
-			if(json.find("{") != string::npos && reader.parse(img_json.substr(img_pos), img_root))
+			if(reader.parse(img_json, img_root))
 			{
 				for(const auto& rdig : img_root["RepoDigests"])
 				{

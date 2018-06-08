@@ -88,9 +88,20 @@ sinsp_container_manager::sinsp_container_manager(sinsp* inspector) :
 	m_unix_socket_path(string(scap_get_host_root()) + "/var/run/docker.sock"),
 	m_api_version("/v1.24")
 {
-#ifndef CYGWING_AGENT
-	curl_global_init(CURL_GLOBAL_DEFAULT);
+}
 
+sinsp_container_manager::~sinsp_container_manager()
+{
+#ifndef CYGWING_AGENT
+	curl_easy_cleanup(m_curl);
+
+	curl_multi_cleanup(m_curlm);
+#endif
+}
+
+void sinsp_container_manager::init()
+{
+#ifndef CYGWING_AGENT
 	m_curlm = curl_multi_init();
 	if(m_curlm)
 	{
@@ -105,17 +116,6 @@ sinsp_container_manager::sinsp_container_manager(sinsp* inspector) :
 		curl_easy_setopt(m_curl, CURLOPT_FOLLOWLOCATION, 1);
 		curl_easy_setopt(m_curl, CURLOPT_WRITEFUNCTION, curl_write_callback);
 	}
-#endif
-}
-
-sinsp_container_manager::~sinsp_container_manager()
-{
-#ifndef CYGWING_AGENT
-	curl_easy_cleanup(m_curl);
-
-	curl_multi_cleanup(m_curlm);
-
-	curl_global_cleanup();
 #endif
 }
 

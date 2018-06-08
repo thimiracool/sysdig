@@ -159,6 +159,7 @@ public:
 	sinsp_container_manager(sinsp* inspector);
 	virtual ~sinsp_container_manager();
 
+	void init();
 	const unordered_map<string, sinsp_container_info>* get_containers();
 	bool remove_inactive_containers();
 	void add_container(const sinsp_container_info& container_info, sinsp_threadinfo *thread);
